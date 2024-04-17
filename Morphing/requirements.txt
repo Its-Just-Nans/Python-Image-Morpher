@@ -5,3 +5,4 @@ imageio
 pynput
 opencv-python-headless
 requests
+# pyqtdarktheme

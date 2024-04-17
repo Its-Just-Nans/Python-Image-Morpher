@@ -1,3 +1,46 @@
+# Version 2.1.0 - (2024-xx-xx)
+### This update includes dependency changes - Please run the command "pip install -r requirements.txt" or equivalent after downloading.
+
+## TODO: Configuration Tab
+## TODO: GIF Quality Slider
+## TODO: Investigate image to memory for checking file size estimate (low priority)
+
+## Added
+- <b>Save Morph Tab</b>
+  - Save feature from v0.2.8 has been overhauled into its own dedicated tab for more refined control of PIM's output
+    - Output Format Toggle (Single vs Multi-Frame)
+    - GIF + Frame Dump Modes for Multi-Frame
+      - GIF Settings: Loop, Rewind, Reverse, Frame Time
+    - Image Extension Selector (.jpg, .png) for Single and Multi-Frame Dump
+    - Configurable Default Output Location
+    - Unreleased: GIF Quality Slider
+      - Comment: <i>This release does contain the UI placeholder, but the feature itself needs more work. Widget is disabled for now.</i>
+  - Special thanks to GitHub user <b>NoJustAnother</b> for [creating this feature request](https://github.com/ddowd97/Python-Image-Morpher/issues/7), which pushed me to properly improve this system within PIM's GUI
+  
+## Changes
+- Applied anti-aliasing to points / triangles rendered within the GUI
+- Progress bar used for Full Blends now has animations for being shown, updated, and hidden
+- Cursor Mode (Create, Move, Delete) is now additionally indicated in the bottom right corner for clarity
+    - Special thanks to GitHub user <b>Jappie</b> for [creating this feature request](https://github.com/ddowd97/Python-Image-Morpher/issues/9)
+- Readability: Changed 'Full Blend' (0.25 to 0.001) → 'Frame Count' (3 to 1000)
+  - Special thanks to GitHub user <b>Jappie</b> for [creating this feature request](https://github.com/ddowd97/Python-Image-Morpher/issues/9)
+- Improved error handling in <b>checkUpdate()</b> to catch other cases - e.g. when the user's Internet connection is down
+  - PIM skips the update check step if any exception is encountered
+- Slightly restructured GUI's MainWindow footer due to save widget migration
+- Updated various tooltips
+- Updated Help section
+- Updated README.md
+
+## Fixes
+- Modified requirements.txt:
+  - Replaced opencv-python with opencv-python-headless to resolve plugin issues between Qt and OpenCV
+    - Special thanks to GitHub user <b>dberga</b> for [creating this issue](https://github.com/ddowd97/Python-Image-Morpher/issues/8)
+
+## Known Bugs
+- While zoomed in, issue with highlighting points to be manually moved or deleted
+- After clicking Resize Left/Right, points on the GUI do not visibly scale correctly
+  - Comment: <i>This is a purely visual bug. For now, this issue can be circumvented by just reloading the affected image. </i>
+
 # Version 2.0.2 - (2021-12-29)
 ### This update includes dependency changes - Please run the command "pip install -r requirements.txt" or equivalent after downloading.
 

@@ -21,6 +21,7 @@ import cv2
 import imageio
 from PyQt5.QtWidgets import QMainWindow, QApplication, QFileDialog
 from pynput import mouse
+# import qdarktheme -- import dark mode
 
 from Morphing import *
 from MorphingGUI import *
@@ -174,7 +175,7 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
         self.triangleUpdate = 0                                                 # Flag used to indicate whether triangles need to be repainted (or removed) in the next paint event
         self.triangleUpdatePref = 0                                             # Flag used to remember whether the user wants to display triangles (in the case that they are forced off)
         self.imageScalar = 0                                                    # Value used to scale created points to where they visually line up with the original images
-        self.fullBlendValue = 0.05                                              # Value used for determining the spacing between alpha increments when full blending
+        self.fullBlendValue = 11                                                # Frame Count - Value used for determining the spacing between alpha increments when full blending
         self.gifValue = 100                                                     # Value used for determining the amount of time allotted to each frame of a created .gif file
 
         self.leftSize = (0, 0)                                                  # Tuple used to store the width and height of the displayed left image
@@ -364,8 +365,8 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
             except IndexError:
                 pass
 
-        if self.threadQueue.empty() and len(self.blendList) == math.ceil(1 / self.fullBlendValue) + 1:
-            temp = self.blendList[int(float(self.alphaValue.text()) / self.fullBlendValue)]
+        if self.threadQueue.empty() and len(self.blendList) == self.fullBlendValue:
+            temp = self.blendList[int(self.alphaSlider.value()) - 1]  # ???
             if len(blendList) == 1:
                 self.blendingImage.setPixmap(QtGui.QPixmap.fromImage(QtGui.QImage(temp.data, temp.shape[1], temp.shape[0], QtGui.QImage.Format_Grayscale8)))
                 self.notificationLine.setText(" Morph took " + "{:.3f}".format(time.time() - start_time) + " seconds.\n")
@@ -387,7 +388,7 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
             self.animationProgress = QtCore.QPropertyAnimation(self.progressBar, b"value")
             self.animationProgress.setDuration(125)
             self.animationProgress.setStartValue(self.progressBar.value())
-            self.animationProgress.setEndValue(self.progressBar.value() + round(1 / (1 / self.fullBlendValue + 1) * 100))
+            self.animationProgress.setEndValue(self.progressBar.value() + round(1 / self.fullBlendValue * 100))
             self.animationProgress.setEasingCurve(QtCore.QEasingCurve.InOutQuart)
             self.animationProgress.start()
 
@@ -420,24 +421,27 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
     # Essentially reconfigures the alpha slider as the user works with the GUI.
     def refreshAlphaSlider(self):
         temp = float(self.alphaValue.text())
-        self.alphaSlider.setMaximum(int(100 / (self.fullBlendValue / 0.01)))
-        self.fullBlendValue = 1.0 / self.alphaSlider.maximum()
+        self.alphaSlider.setMaximum(self.fullBlendValue)
+        # self.fullBlendValue = 1.0 / self.alphaSlider.maximum()
         self.blendText.setText(str(self.fullBlendValue))
-        self.alphaSlider.setValue(round(temp / self.fullBlendValue))
-        if self.alphaSlider.maximum() == 20:
-            self.alphaSlider.setTickInterval(2)
-            self.resetSliderButton.setEnabled(0)
-        else:
+        self.alphaSlider.setValue(round(temp * self.fullBlendValue))
+        self.alphaValue.setText(format(((self.alphaSlider.value() - 1) / (self.alphaSlider.maximum() - self.alphaSlider.minimum())), ".3f"))
+        if self.alphaSlider.maximum() <= 11:
             self.alphaSlider.setTickInterval(1)
+            self.alphaSlider.setSingleStep(1)
+            self.resetSliderButton.setEnabled(int(self.alphaSlider.maximum()) != 11)
+        else:
+            self.alphaSlider.setTickInterval(int(self.alphaSlider.maximum() / 11))
+            self.alphaSlider.setSingleStep(int(self.alphaSlider.maximum() / 11))
             self.resetSliderButton.setEnabled(1)
 
     # QoL function that removes focus from the full blend text window when the user presses Enter.
     # Additionally verifies the user's specified full blending value.
     def blendTextDone(self):
         self.fullBlendComplete = False
-        if self.blendText.text() == '.':
-            self.fullBlendValue = 0.05
-            self.blendText.setText(str(self.fullBlendValue))
+        if self.blendText.text() == '' or not self.blendText.text().isnumeric():
+            self.fullBlendValue = 11
+            # self.blendText.setText(str(self.fullBlendValue))
             self.refreshAlphaSlider()
         else:
             self.verifyValue("blend")
@@ -460,9 +464,8 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
     def verifyValue(self, param: str):
         if param == "blend":
             self.fullBlendComplete = False
-            self.fullBlendValue = min(float(self.blendText.text()), 0.25)
-            self.fullBlendValue = max(self.fullBlendValue, 0.001)
-            self.blendText.setText(str(self.fullBlendValue))
+            self.fullBlendValue = min(int(self.blendText.text()), 1000)
+            self.fullBlendValue = max(self.fullBlendValue, 3)
             self.refreshAlphaSlider()
         elif param == "gif":
             self.gifValue = min(int(self.gifText.text().replace(' ms', '')), 999)
@@ -641,6 +644,7 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
         self.blendButton.setEnabled(val and self.startingImage.hasScaledContents() and self.endingImage.hasScaledContents())
         self.alphaSlider.setEnabled(val)
         self.blendBox.setEnabled(val)
+        self.blendFrameLabel.setEnabled(val and self.blendBox.isChecked())
         self.blendText.setEnabled(val and self.blendBox.isChecked())
         self.saveButton.setEnabled(val and (len(self.blendList) or self.blendedImage is not None))
         self.resetSliderButton.setEnabled(val and self.alphaSlider.maximum() != 20)
@@ -672,15 +676,16 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
         self.saveTab_reverseBox.setEnabled(isOutput and self.saveTab_fullBlendGroup.isEnabled() and self.fullBlendComplete and self.saveTab_gifRadio.isChecked())
         self.saveTab_rewindBox.setEnabled(isOutput and self.saveTab_fullBlendGroup.isEnabled() and self.fullBlendComplete and self.saveTab_gifRadio.isChecked())
         self.saveTab_gifIntervalLabel.setEnabled(isOutput and self.saveTab_fullBlendGroup.isEnabled() and self.fullBlendComplete and self.saveTab_gifRadio.isChecked())
-        self.saveTab_gifQualityBox.setEnabled(isOutput and self.saveTab_fullBlendGroup.isEnabled() and self.fullBlendComplete and self.saveTab_gifRadio.isChecked())
-        self.saveTab_gifQualityLabel.setEnabled(isOutput and self.saveTab_fullBlendGroup.isEnabled() and self.fullBlendComplete and self.saveTab_gifRadio.isChecked())
-        self.saveTab_gifQualitySlider.setEnabled(isOutput and self.saveTab_fullBlendGroup.isEnabled() and self.fullBlendComplete and self.saveTab_gifRadio.isChecked())
+        #self.saveTab_gifQualityBox.setEnabled(isOutput and self.saveTab_fullBlendGroup.isEnabled() and self.fullBlendComplete and self.saveTab_gifRadio.isChecked())
+        #self.saveTab_gifQualityLabel.setEnabled(isOutput and self.saveTab_fullBlendGroup.isEnabled() and self.fullBlendComplete and self.saveTab_gifRadio.isChecked())
+        #self.saveTab_gifQualitySlider.setEnabled(isOutput and self.saveTab_fullBlendGroup.isEnabled() and self.fullBlendComplete and self.saveTab_gifRadio.isChecked())
         self.saveTab_singleRadio.setChecked(self.saveTab_multiRadio.isChecked() and not self.saveTab_fullBlendGroup.isEnabled())
         self.saveTab_imageExtensionGroup.setEnabled(isOutput and (self.saveTab_singleRadio.isChecked() or (self.saveTab_multiRadio.isChecked() and self.saveTab_frameRadio.isChecked())))
         # self.updateSaveEstimate()
 
     ''' Scrapping this idea for now due to feature creep slowing down development
     # Calculates the expected file size of current blend output (with defined parameters from user), if saved
+    # io.BytesIO() ??? writes the image to memory instead of disk... could be worth it.
     def updateSaveEstimate(self):
         val = '0.00'
         if self.blendingImage.hasScaledContents():
@@ -807,12 +812,12 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
     # Resets the full blend value as well, just to prevent any weird behavior from ever occurring.
     def resetAlphaSlider(self):
         self.fullBlendComplete = False
-        self.alphaSlider.setMaximum(20)
-        self.alphaSlider.setTickInterval(2)
-        self.fullBlendValue = 0.05
-        self.blendText.setText('0.05')
+        self.alphaSlider.setMaximum(11)
+        self.alphaSlider.setTickInterval(1)
+        self.fullBlendValue = 11
+        self.blendText.setText('11')
         self.alphaValue.setText('0.5')
-        self.alphaSlider.setValue(10)
+        self.alphaSlider.setValue(6)
         self.resetSliderButton.setEnabled(0)
 
     # Function that handles the rendering of points and triangles onto the GUI when manually called.
@@ -830,7 +835,9 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
             pen = QtGui.QPen()
             pen.setWidth(self.pointSlider.value())
             leftpainter = QtGui.QPainter(leftPic)
+            leftpainter.setRenderHint(QtGui.QPainter.Antialiasing, True)
             rightpainter = QtGui.QPainter(rightPic)
+            rightpainter.setRenderHint(QtGui.QPainter.Antialiasing, True)
             pointWidth = self.pointSlider.value()
 
             # Handles drawing the currently loaded images' delaunay triangles, if enabled
@@ -986,6 +993,7 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
                 QApplication.setOverrideCursor(QtCore.Qt.CursorShape.ArrowCursor)
                 QApplication.restoreOverrideCursor()
                 self.cursorModeLine.setStyleSheet("background : lightgreen;")
+                self.cursorModeLine.setText("Cursor Mode: Create")
                 self.setMouseTracking(False)
                 self.notificationLine.setText(" Delete Mode: Disabled")
             else:
@@ -993,13 +1001,14 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
                 QApplication.restoreOverrideCursor()
                 QApplication.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
                 self.cursorModeLine.setStyleSheet("background : red;")
+                self.cursorModeLine.setText("Cursor Mode: Delete")
                 self.setMouseTracking(True)
                 if self.moveMode:
                     self.moveMode = False
                     self.notificationLine.setText(" Switched Mode: Delete Mode")
                 else:
                     self.notificationLine.setText(" Delete Mode: Enabled")
-        # Move Move Toggle
+        # Move Mode Toggle
         if type(key_event) == QtGui.QKeyEvent and key_event.modifiers() == QtCore.Qt.NoModifier and key_event.key() == QtCore.Qt.Key_E:
             if self.moveMode:
                 self.moveMode = False
@@ -1007,6 +1016,7 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
                 QApplication.setOverrideCursor(QtCore.Qt.CursorShape.ArrowCursor)
                 QApplication.restoreOverrideCursor()
                 self.cursorModeLine.setStyleSheet("background : lightgreen;")
+                self.cursorModeLine.setText("Cursor Mode: Create")
                 self.setMouseTracking(False)
                 self.notificationLine.setText(" Move Mode: Disabled")
             else:
@@ -1014,6 +1024,7 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
                 QApplication.restoreOverrideCursor()
                 QApplication.setOverrideCursor(QtCore.Qt.CursorShape.PointingHandCursor)
                 self.cursorModeLine.setStyleSheet("background : lightblue;")
+                self.cursorModeLine.setText("Cursor Mode: Move")
                 self.setMouseTracking(True)
                 if self.deleteMode:
                     self.deleteMode = False
@@ -1629,6 +1640,7 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
     # The alpha slider than becomes an interactive display, showing each blend in realtime.
     # (Naturally, this is disabled by default, as full blending takes much longer to run)
     def blendBoxUpdate(self):
+        self.blendFrameLabel.setEnabled(int(self.blendBox.isChecked()))
         self.blendText.setEnabled(int(self.blendBox.isChecked()))
         self.notificationLine.setText(" Successfully " + ('enabled' if self.blendBox.isChecked() else 'disabled') + " full blending.")
 
@@ -1663,12 +1675,12 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
     # Typically will only update the alpha value in use unless a full blend has been completed (and is available).
     # If so, movement of this slider will also display the new alpha value's corresponding morph frame.
     def updateAlpha(self):
-        value_num = ((self.alphaSlider.value() / self.alphaSlider.maximum()) / self.fullBlendValue) * self.fullBlendValue
+        value_num = (self.alphaSlider.value() - 1) / (self.alphaSlider.maximum() - self.alphaSlider.minimum())
         value = format(value_num, ".3f")
         self.notificationLine.setText(" Alpha value changed from " + self.alphaValue.text() + " to " + str(value) + ".")
         self.alphaValue.setText(str(value))
         if self.fullBlendComplete:
-            temp = self.blendList[round(value_num / self.fullBlendValue)]
+            temp = self.blendList[self.alphaSlider.value() - 1]
             if len(temp.shape) == 2:
                 self.blendingImage.setPixmap(QtGui.QPixmap.fromImage(QtGui.QImage(temp.data, temp.shape[1], temp.shape[0], QtGui.QImage.Format_Grayscale8)))
             elif temp.shape[2] == 3:
@@ -1712,8 +1724,8 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
         colorScaleA = None
         errorFlag = False
 
-        if self.blendBox.isChecked() and self.blendText.text() == '.':
-            self.notificationLine.setText(" Failed to morph. Please disable full blending or specify a valid value (0.001 to 0.25)")
+        if self.blendBox.isChecked() and self.blendText.text() == '':
+            self.notificationLine.setText(" Failed to morph. Please disable full blending or specify a valid value (3 to 1000)")
             errorFlag = True
         elif len(leftImageRaw.shape) != len(rightImageRaw.shape):
             self.notificationLine.setText(" Failed to morph due to difference in image formats. Check image file types..")
@@ -1728,8 +1740,8 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
             if self.blendBox.isChecked():
                 self.animateProgressBar()
                 self.verifyValue("blend")
-                for x in range(0, math.ceil(1 / self.fullBlendValue) + 1, 1):
-                    x *= self.fullBlendValue
+                for x in range(0, self.fullBlendValue, 1):
+                    x /= self.fullBlendValue
                     self.threadQueue.put(x)
                 self.framer.start()
             else:
@@ -1747,8 +1759,8 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
             start_time = time.time()
             if self.blendBox.isChecked():
                 self.animateProgressBar()
-                for x in range(0, math.ceil(1 / self.fullBlendValue) + 1, 1):
-                    x *= self.fullBlendValue
+                for x in range(0, self.fullBlendValue, 1):
+                    x /= self.fullBlendValue
                     self.threadQueue.put(x)
                 self.framer.start()
             else:
@@ -1768,8 +1780,8 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
             start_time = time.time()
             if self.blendBox.isChecked():
                 self.animateProgressBar()
-                for x in range(0, math.ceil(1 / self.fullBlendValue) + 1, 1):
-                    x *= self.fullBlendValue
+                for x in range(0, self.fullBlendValue, 1):
+                    x /= self.fullBlendValue
                     self.threadQueue.put(x)
                 self.framer.start()
             else:
@@ -1806,10 +1818,8 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
                     return
 
                 temp = copy.deepcopy(self.blendList)
-                #temp = []
+
                 scalar = int(self.saveTab_gifQualityBox.text()[:-1]) / 100
-                #for x in temp1:
-                #    temp.append(cv2.resize(x, (x.width() * scalar, x.height() * scalar), interpolation=cv2.INTER_AREA))
 
                 if self.saveTab_reverseBox.isChecked():
                     temp = list(reversed(temp))
@@ -1819,7 +1829,6 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
 
                 imageio.mimsave(filepath, temp, duration=float(self.gifValue / 1000), loop=int(not self.saveTab_loopBox.isChecked()))
 
-                self.notificationLine.setText(" Full blend successfully saved as .gif")
                 if os.path.exists(filepath):
                     self.notificationLine.setText(" Full blend successfully saved as .gif")
                 else:
@@ -1846,7 +1855,7 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
                 # Single Image
                 elif self.saveTab_singleRadio.isChecked():
                     if self.fullBlendComplete:
-                        currImage = self.blendList[round(((self.alphaSlider.value() / self.alphaSlider.maximum()) / self.fullBlendValue) * self.fullBlendValue / self.fullBlendValue)]
+                        currImage = self.blendList[int(self.alphaSlider.value()) - 1]
                     else:
                         currImage = self.blendedImage
                     self.saveImage(currImage, filepath, filename, imageformat)
@@ -2082,6 +2091,8 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
 if __name__ == "__main__":
     currentApp = QApplication(sys.argv)
     currentForm = MorphingApp()
+
+    # qdarktheme.setup_theme() -- enable dark mode
 
     currentForm.show()
     currentApp.exec_()
