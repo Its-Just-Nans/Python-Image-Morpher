@@ -14,6 +14,7 @@ import shutil
 import requests
 import math
 import webbrowser
+import pathlib
 
 # External Modules - These require installation via the command: "pip install -r requirements.txt" #
 import PyQt5.QtCore
@@ -237,6 +238,9 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
         # self.loadConfiguration()
         self.checkUpdate()
 
+    def open_project(self):
+        webbrowser.open('https://github.com/ddowd97/Python-Image-Morpher/releases/latest')
+        sys.exit()
     # Simple function for checking whether you are up-to-date. :)
     def checkUpdate(self):
         try:
@@ -249,7 +253,8 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
             return
 
         try:
-            with open('version.txt', 'r') as file:
+            path_version = pathlib.Path(__file__).parent.resolve() / 'version.txt'
+            with open(path_version, 'r') as file:
                 localVer = file.readline()[1:]
 
             if resp.status_code == 200 and localVer is not None:
@@ -260,21 +265,18 @@ class MorphingApp(QMainWindow, Ui_MainWindow):
                         verStr = "Installed: {0}\tAvailable: {1}".format(localVer, gitVer)
                         userResponse = QtWidgets.QMessageBox.question(self, "Update Available", verStr + "\n\nDo you want to update now? This will close the program and open the latest release on your browser. Please extract the zip file over your current installation.", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
                         if userResponse == QtWidgets.QMessageBox.Yes:
-                            webbrowser.open('https://github.com/ddowd97/Python-Image-Morpher/releases/latest')
-                            sys.exit()
+                            self.open_project()
                         return
             elif resp.status_code != 200:
                 verStr = "Installed: {0}\tAvailable: {1}".format(localVer, 'NULL')
                 userResponse = QtWidgets.QMessageBox.question(self, "Unexpected Error", verStr + "\n\nFailed to check for updates - Unable to retrieve latest GitHub version number.\nDo you want to open  Python Image Morpher's latest release page now?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
                 if userResponse == QtWidgets.QMessageBox.Yes:
-                    webbrowser.open('https://github.com/ddowd97/Python-Image-Morpher/releases/latest')
-                    sys.exit()
+                    self.open_project()
                 return
             else:
                 userResponse = QtWidgets.QMessageBox.question(self, "Unexpected Error", "Failed to check for updates - Unable to retrieve local version number.\nPlease check whether version.txt is present and unmodified.\n\nDo you want to open  Python Image Morpher's latest release page now?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
                 if userResponse == QtWidgets.QMessageBox.Yes:
-                    webbrowser.open('https://github.com/ddowd97/Python-Image-Morpher/releases/latest')
-                    sys.exit()
+                    self.open_project()
                 return
         except FileNotFoundError:
             print('Cannot obtain installed version number. Is version.txt missing?')
